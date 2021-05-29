@@ -1,6 +1,7 @@
 % WCC 5-28-2021
 % Q: how to read Andrea's .b16 files captured by PCO high-speed camera
 % A: follow document "A1 Image File Formats"
+% WCC 5-28-2021: add image dimensions
 
 classdef B16 < handle
     
@@ -8,6 +9,10 @@ classdef B16 < handle
         d
         dd
         im
+        im_width 
+        im_height
+        header_length
+        file_size
     end
     
     methods
@@ -48,13 +53,36 @@ classdef B16 < handle
         
         
         function reconstruct (obj)
+            % check data length
+            assert(obj.im_width*obj.im_height*2 == obj.file_size - obj.header_length)
+            
             % convert 16-bit pixel data from bitmap to 2D structure
-            pixeldata_start_from = obj.get_i_word(3) + 1
+            pixeldata_start_from = obj.header_length + 1
+            
+            % crop the bitmapped pixel data
             ddd = obj.dd(pixeldata_start_from:end);            
-            im2 = reshape(ddd,2,2016,2016); 
+            
+            % chop it into two-byte * height * width
+            im2 = reshape(ddd,2,obj.im_height,obj.im_width); 
+            
+            % 
+            % convert the two-byte as "16-bit unsigned integer"
+            % 
             im3 = double(im2(1,:,:)) + 256*double(im2(2,:,:));
+
+            % reduce dimensionality to 2
             im4 = squeeze(im3);
+            
+            % store it
             obj.im = im4;
+            
+            % 
+            % TO VERIFY: the data range does not match the header info --
+            % b/w min and b/w max
+            % 
+            datalin = im4(:);
+            max(datalin);
+            min(datalin);
         end
         
         function list_header (obj)
@@ -64,6 +92,11 @@ classdef B16 < handle
                 value = obj.get_i_word(i);
                 fprintf('%d: %d\n',i,value)
             end
+            
+            obj.im_width = obj.get_i_word(4);
+            obj.im_height = obj.get_i_word(5);
+            obj.file_size = obj.get_i_word(2);
+            obj.header_length = obj.get_i_word(3);
         end
         
         function wd = byte2word (obj,b)
